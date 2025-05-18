@@ -1,2 +1,4 @@
 src/.env
 data/images/*/*.png
+data/chunks/*.json
+src/__pycache__/*
