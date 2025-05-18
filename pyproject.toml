@@ -5,7 +5,7 @@ description = "Agentic Retrieval for Finance"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "chonkie>=1.0.7",
+    "chonkie[hub]>=1.0.7",
     "fastembed>=0.7.0",
     "fastparquet>=2024.11.0",
     "loguru>=0.7.3",
