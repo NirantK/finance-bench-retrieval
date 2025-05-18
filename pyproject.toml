@@ -1,0 +1,17 @@
+[project]
+name = "finance-bench-retrieval"
+version = "0.1.0"
+description = "Agentic Retrieval for Finance"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastparquet>=2024.11.0",
+    "loguru>=0.7.3",
+    "markitdown[all]>=0.1.1",
+    "openai>=1.79.0",
+    "pandas>=2.2.3",
+    "pyarrow>=20.0.0",
+    "python-dotenv>=1.1.0",
+    "tqdm>=4.67.1",
+    "turbopuffer[fast]>=0.4.1",
+]
