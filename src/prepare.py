@@ -15,7 +15,6 @@ load_dotenv()
 client = OpenAI()
 md = MarkItDown(llm_client=client, llm_model="gpt-4.1")
 
-
 chunker = RecursiveChunker(
     chunk_size=512,
     min_characters_per_chunk=100,
@@ -70,7 +69,9 @@ def prepare_images(file: Path, images_path: Path, dpi: int = 300):
 
 def annotate_chunks(chunks_path: Path, document_info_path: Path, output_path: Path):
     document_info = pd.read_json(document_info_path, lines=True)
-
+    if output_path.exists():
+        logger.info(f"Skipping {output_path} because it already exists")
+        return
     chunks = []
     for file in chunks_path.rglob("*.json"):
         with open(file) as f:
@@ -125,7 +126,7 @@ def prepare(
             prepare_markdown(file, markdown_path)
             prepare_images(file, images_path)
             prepare_chunks(file, chunks_path, markdown_path)
-        logger.info("Annotating chunks...")
+        # logger.info("Annotating chunks...")
         annotate_chunks(
             chunks_path=chunks_path,
             document_info_path=document_info_path,
