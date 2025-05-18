@@ -21,6 +21,7 @@ chunker = RecursiveChunker(
     return_type="texts",
 ).from_recipe("markdown", lang="en")
 
+
 def prepare_markdown(file: Path, markdown_path: Path):
     output_path = markdown_path / f"{file.stem}.md"
     if not output_path.exists():
@@ -31,6 +32,7 @@ def prepare_markdown(file: Path, markdown_path: Path):
             return
         with open(output_path, "w") as f:
             f.write(result.text_content)
+
 
 def prepare_chunks(file: Path, chunks_path: Path, markdown_path: Path):
     output_path = chunks_path / f"{file.stem}.json"
@@ -75,7 +77,7 @@ def prepare(pdf_path: Path, markdown_path: Path, images_path: Path, chunks_path:
     markdown_path.mkdir(parents=True, exist_ok=True)
     images_path.mkdir(parents=True, exist_ok=True)
     chunks_path.mkdir(parents=True, exist_ok=True)
-    
+
     pdf_files = list(pdf_path.glob("*.pdf"))
     with tqdm(pdf_files, desc="Processing PDFs", unit="file") as pbar:
         for file in pbar:
