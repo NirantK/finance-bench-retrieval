@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import pymupdf
 from chonkie import RecursiveChunker
 from dotenv import load_dotenv
@@ -67,12 +68,51 @@ def prepare_images(file: Path, images_path: Path, dpi: int = 300):
             pix.save(output_path / f"{i}.png")
 
 
-def prepare(pdf_path: Path, markdown_path: Path, images_path: Path, chunks_path: Path):
-    pdf_path, markdown_path, images_path, chunks_path = (
+def annotate_chunks(chunks_path: Path, document_info_path: Path, output_path: Path):
+    document_info = pd.read_json(document_info_path, lines=True)
+
+    chunks = []
+    for file in chunks_path.rglob("*.json"):
+        with open(file) as f:
+            try:
+                texts = json.loads(f.read())
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing {file}: {e}. Skipping!")
+                continue
+            chunks.extend(
+                [
+                    {
+                        "doc_name": file.stem,
+                        "text": text,
+                        "chunk_index": index,
+                    }
+                    for index, text in enumerate(texts)
+                ]
+            )
+
+    # logger.debug(type(chunks[0]))
+    df_chunks = pd.DataFrame(chunks)
+    # logger.debug(df_chunks.columns)
+    # logger.debug(df_chunks.head())
+    # logger.debug(document_info.head())
+    df_chunks_merged = pd.merge(df_chunks, document_info, on="doc_name")
+    # logger.debug(df_chunks_merged.head())
+    df_chunks_merged.to_json(output_path, orient="records", lines=True)
+
+
+def prepare(
+    pdf_path: Path,
+    markdown_path: Path,
+    images_path: Path,
+    chunks_path: Path,
+    document_info_path: Path,
+):
+    pdf_path, markdown_path, images_path, chunks_path, document_info_path = (
         Path(pdf_path),
         Path(markdown_path),
         Path(images_path),
         Path(chunks_path),
+        Path(document_info_path),
     )
     markdown_path.mkdir(parents=True, exist_ok=True)
     images_path.mkdir(parents=True, exist_ok=True)
@@ -85,3 +125,9 @@ def prepare(pdf_path: Path, markdown_path: Path, images_path: Path, chunks_path:
             prepare_markdown(file, markdown_path)
             prepare_images(file, images_path)
             prepare_chunks(file, chunks_path, markdown_path)
+        logger.info("Annotating chunks...")
+        annotate_chunks(
+            chunks_path=chunks_path,
+            document_info_path=document_info_path,
+            output_path=Path("data/processed/annotated_chunks.jsonl"),
+        )
