@@ -1,6 +1,8 @@
+import json
 from pathlib import Path
 
 import pymupdf
+from chonkie import RecursiveChunker
 from dotenv import load_dotenv
 from loguru import logger
 from markitdown import MarkItDown
@@ -13,6 +15,12 @@ client = OpenAI()
 md = MarkItDown(llm_client=client, llm_model="gpt-4.1")
 
 
+chunker = RecursiveChunker(
+    chunk_size=512,
+    min_characters_per_chunk=100,
+    return_type="texts",
+).from_recipe("markdown", lang="en")
+
 def prepare_markdown(file: Path, markdown_path: Path):
     output_path = markdown_path / f"{file.stem}.md"
     if not output_path.exists():
@@ -23,6 +31,15 @@ def prepare_markdown(file: Path, markdown_path: Path):
             return
         with open(output_path, "w") as f:
             f.write(result.text_content)
+
+def prepare_chunks(file: Path, chunks_path: Path, markdown_path: Path):
+    output_path = chunks_path / f"{file.stem}.json"
+    if not output_path.exists():
+        with open(output_path, "w") as f:
+            markdown_file_path = Path(markdown_path / f"{file.stem}.md")
+            text = open(markdown_file_path).read()
+            chunk_texts = [chunk.text for chunk in chunker(text)]
+            f.write(json.dumps(chunk_texts, indent=4))
 
 
 def prepare_images(file: Path, images_path: Path, dpi: int = 300):
@@ -48,18 +65,21 @@ def prepare_images(file: Path, images_path: Path, dpi: int = 300):
             pix.save(output_path / f"{i}.png")
 
 
-def prepare(pdf_path: Path, markdown_path: Path, images_path: Path):
-    pdf_path, markdown_path, images_path = (
+def prepare(pdf_path: Path, markdown_path: Path, images_path: Path, chunks_path: Path):
+    pdf_path, markdown_path, images_path, chunks_path = (
         Path(pdf_path),
         Path(markdown_path),
         Path(images_path),
+        Path(chunks_path),
     )
     markdown_path.mkdir(parents=True, exist_ok=True)
     images_path.mkdir(parents=True, exist_ok=True)
-
+    chunks_path.mkdir(parents=True, exist_ok=True)
+    
     pdf_files = list(pdf_path.glob("*.pdf"))
     with tqdm(pdf_files, desc="Processing PDFs", unit="file") as pbar:
         for file in pbar:
             pbar.set_postfix(file=file.name, refresh=False)
             prepare_markdown(file, markdown_path)
             prepare_images(file, images_path)
+            prepare_chunks(file, chunks_path, markdown_path)
