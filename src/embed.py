@@ -23,6 +23,11 @@ def openai_embedding(texts: List[str], model: str = "text-embedding-3-large"):
     return embeddings
 
 
+def query_fastembedding(texts: List[str], model: str = "snowflake/snowflake-arctic-embed-xs") -> List[List[float]]:
+    fst = TextEmbedding(model=model)
+    return list(fst.embed(texts))[0]
+
+
 def fastembedding(texts: List[str], model: str = "snowflake/snowflake-arctic-embed-xs") -> List[List[float]]:
     fst = TextEmbedding(model=model)
     vectors = []
