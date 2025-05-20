@@ -5,12 +5,11 @@ from typing import List
 import cohere
 import turbopuffer as tpuf
 from dotenv import load_dotenv
-from langchain_core.tools import tool
+from loguru import logger
 
-from src.embed import fastembedding
+from src.embed import query_fastembedding
 
 load_dotenv()
-
 tpuf.api_key = os.getenv("TURBOPUFFER_API_KEY")
 tpuf.api_base_url = "https://gcp-us-central1.turbopuffer.com"
 
@@ -18,7 +17,7 @@ tpuf.api_base_url = "https://gcp-us-central1.turbopuffer.com"
 co = cohere.ClientV2()
 
 
-def cohere_rerank(query: str, documents: List[str], top_k: int = 10) -> str:
+def cohere_rerank(query: str, documents: List[str], top_k: int) -> str:
     response = co.rerank(
         model="rerank-v3.5",
         query=query,
@@ -40,13 +39,14 @@ def reciprocal_rank_fusion(result_lists, k=60):  # simple way to fuse results ba
     ]
 
 
-@tool
-def hybrid_search(query: str, top_k: int = 10) -> str:
+# @tool
+def hybrid_search(query: str, top_k: int) -> str:
     """
     Search the database for the most relevant documents using a hybrid approach.
     """
     namespace = os.getenv("TURBOPUFFER_NAMESPACE")
     ns = tpuf.Namespace(namespace)
+    query_vector = query_fastembedding(query)
     with ThreadPoolExecutor() as executor:  # concurrent, could add more
         fts_future = executor.submit(
             ns.query,
@@ -56,25 +56,30 @@ def hybrid_search(query: str, top_k: int = 10) -> str:
         )
         vector_future = executor.submit(
             ns.query,
-            vector=fastembedding(query),
+            rank_by=["vector", "ANN", query_vector],
             include_attributes=["text", "doc_name", "doc_period"],
             top_k=top_k,
         )
         fts_result, vector_result = fts_future.result(), vector_future.result()
-        results = cohere_rerank(query, documents=fts_result + vector_result, top_k=top_k)
-        return "\n\n".join([result.attributes["text"] for result in results])
+        fts_text, vector_text = (
+            [row.attributes["text"] for row in fts_result.rows],
+            [row.attributes["text"] for row in vector_result.rows],
+        )
+        logger.info(f"# FTS results: {len(fts_text)}, # Vector results: {len(vector_text)}")
+        results = cohere_rerank(query, documents=fts_text + vector_text, top_k=top_k)
+        return results
 
 
-@tool
-def vector_search(query: str, top_k: int = 10) -> str:
+# @tool
+def vector_search(query: str, top_k: int) -> str:
     """
     Search the database for the most relevant documents.
     """
     namespace = os.getenv("TURBOPUFFER_NAMESPACE")
     ns = tpuf.Namespace(namespace)
+    query_vector = query_fastembedding(query)
     query_result = ns.query(
-        vector=fastembedding(query),
-        rank_by=["vector", "ANN", query],
+        rank_by=["vector", "ANN", query_vector],
         top_k=top_k,
         include_attributes=["text", "doc_name", "doc_period"],
     ).rows
@@ -85,8 +90,8 @@ def vector_search(query: str, top_k: int = 10) -> str:
 
 
 # @tool("bm25_search", parse_docstring=True, return_direct=False)
-@tool
-def bm25_search(query: str, top_k: int = 10) -> str:
+# @tool
+def bm25_search(query: str, top_k: int) -> str:
     """
     Search the database for the most relevant documents using BM25.
 
@@ -101,6 +106,7 @@ def bm25_search(query: str, top_k: int = 10) -> str:
         top_k=top_k,
         include_attributes=["text", "doc_name", "doc_period"],
     ).rows
+    logger.info(query_result)
     results = []
     # logger.info(query_result)
     for row in query_result:
