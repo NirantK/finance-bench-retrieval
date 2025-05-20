@@ -5,7 +5,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import BaseModel, Field
 
-from search_tools import bm25_search
+from src.search_tools import bm25_search, hybrid_search
 
 response_model = init_chat_model("openai:gpt-4.1", temperature=0)
 
@@ -91,48 +91,60 @@ def generate_answer(state: MessagesState):
     return {"messages": [response]}
 
 
-workflow = StateGraph(MessagesState)
+def create_agentic_rag_graph():
+    """Create the agentic RAG graph."""
+    workflow = StateGraph(MessagesState)
 
-# Define the nodes we will cycle between
-workflow.add_node(generate_query_or_respond)
-workflow.add_node("retrieve", ToolNode([bm25_search]))
-workflow.add_node(rewrite_question)
-workflow.add_node(generate_answer)
+    # Define the nodes we will cycle between
+    workflow.add_node(generate_query_or_respond)
+    workflow.add_node("retrieve", ToolNode([hybrid_search]))
+    workflow.add_node(rewrite_question)
+    workflow.add_node(generate_answer)
 
-workflow.add_edge(START, "generate_query_or_respond")
+    workflow.add_edge(START, "generate_query_or_respond")
 
-# Decide whether to retrieve
-workflow.add_conditional_edges(
-    "generate_query_or_respond",
-    # Assess LLM decision (call `retriever_tool` tool or respond to the user)
-    tools_condition,
-    {
-        # Translate the condition outputs to nodes in our graph
-        "tools": "retrieve",
-        END: END,
-    },
-)
+    # Decide whether to retrieve
+    workflow.add_conditional_edges(
+        "generate_query_or_respond",
+        # Assess LLM decision (call `retriever_tool` tool or respond to the user)
+        tools_condition,
+        {
+            # Translate the condition outputs to nodes in our graph
+            "tools": "retrieve",
+            END: END,
+        },
+    )
 
-# Edges taken after the `action` node is called.
-workflow.add_conditional_edges(
-    "retrieve",
-    # Assess agent decision
-    grade_documents,
-)
-workflow.add_edge("generate_answer", END)
-workflow.add_edge("rewrite_question", "generate_query_or_respond")
+    # Edges taken after the `action` node is called.
+    workflow.add_conditional_edges(
+        "retrieve",
+        # Assess agent decision
+        grade_documents,
+    )
+    workflow.add_edge("generate_answer", END)
+    workflow.add_edge("rewrite_question", "generate_query_or_respond")
 
-# Compile
-graph = workflow.compile()
-for chunk in graph.stream(
-    {
-        "messages": [
-            {
-                "role": "user",
-                "content": "If we exclude the impact of M&A, which segment has dragged down 3M's overall growth in 2022?",
-            }
-        ]
-    }
-):
-    for node, update in chunk.items():
-        print(f"""Update from node: {node}\n--------------------------\n{update["messages"][-1].content}""")
+    # Compile
+    graph = workflow.compile()
+    return graph
+
+
+def rag_dag(query: str) -> str:
+    """Run the agentic RAG workflow."""
+    graph = create_agentic_rag_graph()
+    response = graph.invoke({"messages": [{"role": "user", "content": query}]})
+    return response["messages"][-1].content
+
+
+# for chunk in graph.stream(
+#     {
+#         "messages": [
+#             {
+#                 "role": "user",
+#                 "content": "If we exclude the impact of M&A, which segment has dragged down 3M's overall growth in 2022?",
+#             }
+#         ]
+#     }
+# ):
+#     for node, update in chunk.items():
+#         print(f"""Update from node: {node}\n--------------------------\n{update["messages"][-1].content}""")

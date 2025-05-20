@@ -4,8 +4,10 @@ import click
 from dotenv import load_dotenv
 from loguru import logger
 
+from src.agentic_rag import rag_dag
 from src.ingest import to_turbopuffer
 from src.search_tools import hybrid_search
+from src.simple_rag import rag_chain
 
 load_dotenv()
 
@@ -30,7 +32,7 @@ def ingest(chunks_file, vectors_file):
 
 @cli.command()
 @click.option("--query", prompt="Enter your search query", help="Search query")
-@click.option("--top-k", default=3, help="Number of results to return")
+@click.option("--top-k", default=10, help="Number of results to return")
 def search(query, top_k):
     """Search documents using vector search"""
     results = hybrid_search(
@@ -38,6 +40,22 @@ def search(query, top_k):
         top_k=top_k,
     )
     logger.info(results)
+
+
+@cli.command()
+@click.option("--query", prompt="Enter your question", help="RAG query")
+def rag(query):
+    """Run a simple RAG workflow"""
+    response = rag_chain(query)
+    logger.info(response)
+
+
+@cli.command()
+@click.option("--query", prompt="Enter your question", help="Agentic RAG query")
+def agentic_rag(query):
+    """Run a simple RAG workflow"""
+    response = rag_dag(query)
+    logger.info(response)
 
 
 def main():

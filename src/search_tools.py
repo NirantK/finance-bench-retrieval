@@ -10,11 +10,9 @@ from loguru import logger
 from src.embed import query_fastembedding
 
 load_dotenv()
+co = cohere.ClientV2()
 tpuf.api_key = os.getenv("TURBOPUFFER_API_KEY")
 tpuf.api_base_url = "https://gcp-us-central1.turbopuffer.com"
-
-
-co = cohere.ClientV2()
 
 
 def cohere_rerank(query: str, documents: List[str], top_k: int) -> str:
@@ -24,7 +22,8 @@ def cohere_rerank(query: str, documents: List[str], top_k: int) -> str:
         documents=documents,
         top_n=top_k,
     )
-    return response.results
+    indices = [result.index for result in response.results]
+    return [documents[i] for i in indices]
 
 
 def reciprocal_rank_fusion(result_lists, k=60):  # simple way to fuse results based on position
@@ -66,7 +65,7 @@ def hybrid_search(query: str, top_k: int) -> str:
             [row.attributes["text"] for row in vector_result.rows],
         )
         logger.info(f"# FTS results: {len(fts_text)}, # Vector results: {len(vector_text)}")
-        results = cohere_rerank(query, documents=fts_text + vector_text, top_k=top_k)
+        results = cohere_rerank(query, documents=list(set(fts_text + vector_text)), top_k=top_k)
         return results
 
 
@@ -91,7 +90,7 @@ def vector_search(query: str, top_k: int) -> str:
 
 # @tool("bm25_search", parse_docstring=True, return_direct=False)
 # @tool
-def bm25_search(query: str, top_k: int) -> str:
+def bm25_search(query: str, top_k: int, rank_by: str = "text") -> str:
     """
     Search the database for the most relevant documents using BM25.
 
@@ -102,7 +101,7 @@ def bm25_search(query: str, top_k: int) -> str:
     namespace = os.getenv("TURBOPUFFER_NAMESPACE")
     ns = tpuf.Namespace(namespace)
     query_result = ns.query(
-        rank_by=["text", "BM25", query],
+        rank_by=[rank_by, "BM25", query],
         top_k=top_k,
         include_attributes=["text", "doc_name", "doc_period"],
     ).rows
@@ -112,4 +111,3 @@ def bm25_search(query: str, top_k: int) -> str:
     for row in query_result:
         results.append(row.attributes["text"])
     return "\n\n".join(results)
-    # logger.info(text_results)
