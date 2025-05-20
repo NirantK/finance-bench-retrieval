@@ -24,6 +24,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "turbopuffer[fast]>=0.4.1",
     "cohere>=5.15.0",
+    "judges>=0.0.10",
+    "seaborn>=0.13.2",
 ]
 
 [tool.ruff]
