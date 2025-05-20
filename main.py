@@ -1,26 +1,32 @@
-import uuid
-from datetime import datetime
+import os
 
-from src.ingest import fastembedding, write_to_turbopuffer
-from src.prepare import prepare
+from dotenv import load_dotenv
+
+from src.ingest import to_turbopuffer
+
+load_dotenv()
 
 
 def main():
-    now = datetime.now()
-    date = now.strftime("%Y-%m-%d")
-    hour = now.hour
-    prepare(
-        pdf_path="pdfs",
-        markdown_path="data/markdown",
-        images_path="data/images",
-        chunks_path="data/chunks",
-        document_info_path="data/ground_truth/financebench_document_information.jsonl",
-    )
-    write_to_turbopuffer(
-        embedding_function=fastembedding,
+    namespace = os.getenv("TURBOPUFFER_NAMESPACE")
+    # prepare(
+    #     pdf_path="pdfs",
+    #     markdown_path="data/markdown",
+    #     images_path="data/images",
+    #     chunks_path="data/chunks",
+    #     document_info_path="data/ground_truth/financebench_document_information.jsonl",
+    # )
+    to_turbopuffer(
         annotated_chunks_filepath="data/processed/annotated_chunks.jsonl",
-        namespace=f"nirantk-fastembedding-{date}-{hour}-{uuid.uuid4()}",
+        namespace=namespace,
+        vectors_filepath="data/vectors/214.pkl",
     )
+    # results = bm25_search(
+    #     query="What were 3M revenue and net income in 2024?",
+    #     top_k=10,
+    #     include_attributes=["text", "doc_name"],
+    # )
+    # logger.info(results)
 
 
 if __name__ == "__main__":

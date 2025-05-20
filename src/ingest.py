@@ -1,85 +1,92 @@
 import os
+import uuid
 from itertools import batched
-from pathlib import Path
-from typing import Callable, List
 
 import joblib
 import pandas as pd
 import turbopuffer as tpuf
 from dotenv import load_dotenv
-from fastembed import TextEmbedding
 from loguru import logger
-from openai import OpenAI
-from tqdm import tqdm
 
 load_dotenv()
-client = OpenAI()
-
 tpuf.api_key = os.getenv("TURBOPUFFER_API_KEY")
 tpuf.api_base_url = "https://gcp-us-central1.turbopuffer.com"
 
 
-def openai_embedding(texts: List[str], model: str = "text-embedding-3-large"):
-    texts = [text.replace("\n", " ") for text in texts]
-    embeddings = []
-    for batch in batched(texts, 2):
-        responses = client.embeddings.create(input=batch, model=model)
-        embeddings.extend([response.embedding for response in responses.data])
-    return embeddings
-
-
-def fastembedding(
-    texts: List[str], model: str = "snowflake/snowflake-arctic-embed-xs"
-) -> List[List[float]]:
-    fst = TextEmbedding(model=model)
-    vectors = []
-    batch_size = 512
-    for index, batch in tqdm(
-        enumerate(batched(texts, batch_size)),
-        desc=f"Embedding texts with {model}",
-        total=len(texts) // batch_size,
-        unit="batch",
-    ):
-        vectors.extend(list(fst.embed(batch)))
-        # Make sure the directory exists
-        vectors_path = Path("data/vectors")
-        vectors_path.mkdir(parents=True, exist_ok=True)
-        joblib.dump(vectors, vectors_path / f"{index}.pkl")
-    return vectors
-
-
-def get_vectors(
-    annotated_chunks_filepath: str,
-    embedding_function: Callable[[List[str]], List[List[float]]],
-) -> tuple[pd.DataFrame, List[List[float]]]:
-    annotated_chunks = pd.read_json(annotated_chunks_filepath, lines=True)
-    vectors = embedding_function(annotated_chunks["text"].tolist())
-    logger.info(f"Got {len(vectors)} vectors")
-
-    return annotated_chunks, vectors
-
-
-def write_to_turbopuffer(
-    embedding_function: Callable[[List[str]], List[List[float]]],
+def to_turbopuffer(
     annotated_chunks_filepath: str,
     namespace: str,
+    vectors_filepath: str,
 ):
-    annotated_chunks, vectors = get_vectors(
-        annotated_chunks_filepath, embedding_function
-    )
     ns = tpuf.Namespace(namespace)
-    logger.info(f"Writing {len(vectors)} vectors to Turbopuffer")
-    ids = [
-        f"{row['doc_name']}_{row['chunk_index']}"
-        for row in annotated_chunks.itertuples()
-    ]
+    annotated_chunks = pd.read_json(annotated_chunks_filepath, lines=True)
     # Take all the columns from annotated_chunks and add them to the upsert_columns
-    columns = annotated_chunks.to_dict(orient="records")
-    ns.write(
-        upsert_columns={
-            "id": ids,
-            "vector": vectors,
-            **columns,
-        },
-        distance_metric="cosine_distance",
+    chunks_columns = {
+        col: annotated_chunks[col].tolist() for col in annotated_chunks.columns
+    }
+    ids = [
+        str(uuid.uuid4()) for _ in range(len(annotated_chunks))
+    ]  # Convert UUIDs to strings
+    vectors = joblib.load(vectors_filepath)
+    if len(vectors) != len(ids) or len(vectors) != len(annotated_chunks):
+        logger.error(
+            f"Vectors: {len(vectors)}, ids: {len(ids)}, annotated_chunks: {len(annotated_chunks)}"
+        )
+        raise ValueError("Vectors, ids, and annotated_chunks must have the same length")
+    logger.debug(f"Vector type: {type(vectors)}, shape: {vectors[0].shape}")
+    # Define schema for the data
+    schema = {}
+    logger.info(f"Columns: {annotated_chunks.columns}")
+    # annotated_chunks.drop(columns=["id"], inplace=True)
+    # Add schema for text fields to enable full-text search
+    for col in annotated_chunks.columns:
+        if annotated_chunks[col].dtype == "object":  # String/text columns
+            schema[col] = {
+                "type": "string",
+                "full_text_search": True,  # Enable full-text search for text fields
+            }
+        elif annotated_chunks[col].dtype in ["int64", "float64"]:  # Numeric columns
+            schema[col] = {"type": "int", "filterable": True}
+
+    # Validate schema against data structure
+    def validate_schema(data, schema):
+        for col, col_data in data.items():
+            if col not in schema:
+                raise ValueError(f"Column '{col}' exists in data but not in schema")
+            if schema[col]["type"] == "string" and not all(
+                isinstance(x, str) for x in col_data
+            ):
+                raise ValueError(
+                    f"Column '{col}' is defined as string but contains non-string values"
+                )
+            if schema[col]["type"] == "int" and not all(
+                isinstance(x, (int, float)) for x in col_data
+            ):
+                raise ValueError(
+                    f"Column '{col}' is defined as int but contains non-numeric values"
+                )
+
+    validate_schema(annotated_chunks, schema)
+    logger.info("Schema validation passed")
+
+    # Upsert the data with vectors
+    for batch in batched(zip(ids, chunks_columns, vectors), 50_000):
+        ns.write(
+            upsert_columns={
+                "id": [id for id, _, _ in batch],
+                **{k: [v for _, v, _ in batch] for k in chunks_columns},
+                "vector": [vector for _, _, vector in batch],
+            },
+            # schema=schema,
+            distance_metric="cosine_distance",
+        )
+    # Get and log the schema
+    try:
+        current_schema = ns.schema()
+        logger.info(f"Current namespace schema: {current_schema}")
+    except Exception as e:
+        logger.warning(f"Could not retrieve schema: {str(e)}")
+
+    logger.info(
+        f"Successfully ingested {len(vectors)} records into namespace '{namespace}'"
     )
