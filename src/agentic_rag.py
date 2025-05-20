@@ -1,8 +1,10 @@
 from typing import Literal
 
 from langchain.chat_models import init_chat_model
+from langgraph.errors import GraphRecursionError
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.search_tools import bm25_search, hybrid_search
@@ -132,7 +134,11 @@ def create_agentic_rag_graph():
 def rag_dag(query: str) -> str:
     """Run the agentic RAG workflow."""
     graph = create_agentic_rag_graph()
-    response = graph.invoke({"messages": [{"role": "user", "content": query}]})
+    try:
+        response = graph.invoke({"messages": [{"role": "user", "content": query}]})
+    except GraphRecursionError as e:
+        logger.error(f"Graph recursion error: {e}")
+        return "I'm sorry, I can't answer that question."
     return response["messages"][-1].content
 
 
