@@ -52,6 +52,7 @@ def to_turbopuffer(
                     "full_text_search": True,
                 },
             },
+            distance_metric="cosine_distance",
         )
     # # Get and log the schema
     logger.info(ns.schema())
