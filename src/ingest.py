@@ -21,17 +21,11 @@ def to_turbopuffer(
     ns = tpuf.Namespace(namespace)
     annotated_chunks = pd.read_json(annotated_chunks_filepath, lines=True)
     # Take all the columns from annotated_chunks and add them to the upsert_columns
-    chunks_columns = {
-        col: annotated_chunks[col].tolist() for col in annotated_chunks.columns
-    }
-    ids = [
-        str(uuid.uuid4()) for _ in range(len(annotated_chunks))
-    ]  # Convert UUIDs to strings
+    chunks_columns = {col: annotated_chunks[col].tolist() for col in annotated_chunks.columns}
+    ids = [str(uuid.uuid4()) for _ in range(len(annotated_chunks))]  # Convert UUIDs to strings
     vectors = joblib.load(vectors_filepath)
     if len(vectors) != len(ids) or len(vectors) != len(annotated_chunks):
-        logger.error(
-            f"Vectors: {len(vectors)}, ids: {len(ids)}, annotated_chunks: {len(annotated_chunks)}"
-        )
+        logger.error(f"Vectors: {len(vectors)}, ids: {len(ids)}, annotated_chunks: {len(annotated_chunks)}")
         raise ValueError("Vectors, ids, and annotated_chunks must have the same length")
     logger.debug(f"Vector type: {type(vectors)}, shape: {vectors[0].shape}")
     # Define schema for the data
@@ -53,18 +47,10 @@ def to_turbopuffer(
         for col, col_data in data.items():
             if col not in schema:
                 raise ValueError(f"Column '{col}' exists in data but not in schema")
-            if schema[col]["type"] == "string" and not all(
-                isinstance(x, str) for x in col_data
-            ):
-                raise ValueError(
-                    f"Column '{col}' is defined as string but contains non-string values"
-                )
-            if schema[col]["type"] == "int" and not all(
-                isinstance(x, (int, float)) for x in col_data
-            ):
-                raise ValueError(
-                    f"Column '{col}' is defined as int but contains non-numeric values"
-                )
+            if schema[col]["type"] == "string" and not all(isinstance(x, str) for x in col_data):
+                raise ValueError(f"Column '{col}' is defined as string but contains non-string values")
+            if schema[col]["type"] == "int" and not all(isinstance(x, (int, float)) for x in col_data):
+                raise ValueError(f"Column '{col}' is defined as int but contains non-numeric values")
 
     validate_schema(annotated_chunks, schema)
     logger.info("Schema validation passed")
@@ -87,6 +73,4 @@ def to_turbopuffer(
     except Exception as e:
         logger.warning(f"Could not retrieve schema: {str(e)}")
 
-    logger.info(
-        f"Successfully ingested {len(vectors)} records into namespace '{namespace}'"
-    )
+    logger.info(f"Successfully ingested {len(vectors)} records into namespace '{namespace}'")
