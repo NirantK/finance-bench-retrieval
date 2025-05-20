@@ -30,9 +30,7 @@ GRADE_PROMPT = (
 class GradeDocuments(BaseModel):
     """Grade documents using a binary score for relevance check."""
 
-    binary_score: str = Field(
-        description="Relevance score: 'yes' if relevant, or 'no' if not relevant"
-    )
+    binary_score: str = Field(description="Relevance score: 'yes' if relevant, or 'no' if not relevant")
 
 
 grader_model = init_chat_model("openai:gpt-4.1", temperature=0)
@@ -46,9 +44,7 @@ def grade_documents(
     context = state["messages"][-1].content
 
     prompt = GRADE_PROMPT.format(question=question, context=context)
-    response = grader_model.with_structured_output(GradeDocuments).invoke(
-        [{"role": "user", "content": prompt}]
-    )
+    response = grader_model.with_structured_output(GradeDocuments).invoke([{"role": "user", "content": prompt}])
     score = response.binary_score
 
     if score == "yes":
@@ -139,6 +135,4 @@ for chunk in graph.stream(
     }
 ):
     for node, update in chunk.items():
-        print(
-            f"""Update from node: {node}\n--------------------------\n{update["messages"][-1].content}"""
-        )
+        print(f"""Update from node: {node}\n--------------------------\n{update["messages"][-1].content}""")

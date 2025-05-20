@@ -23,9 +23,7 @@ def openai_embedding(texts: List[str], model: str = "text-embedding-3-large"):
     return embeddings
 
 
-def fastembedding(
-    texts: List[str], model: str = "snowflake/snowflake-arctic-embed-xs"
-) -> List[List[float]]:
+def fastembedding(texts: List[str], model: str = "snowflake/snowflake-arctic-embed-xs") -> List[List[float]]:
     fst = TextEmbedding(model=model)
     vectors = []
     batch_size = 512
