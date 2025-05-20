@@ -3,3 +3,4 @@ data/images/*/*.png
 data/chunks/*.json
 src/__pycache__/*
 data/vectors/*.pkl
+data/processed/*
