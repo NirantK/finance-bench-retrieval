@@ -64,7 +64,7 @@ def hybrid_search(query: str, top_k: int) -> str:
             [row.attributes["text"] for row in fts_result.rows],
             [row.attributes["text"] for row in vector_result.rows],
         )
-        logger.info(f"# FTS results: {len(fts_text)}, # Vector results: {len(vector_text)}")
+        # logger.info(f"# FTS results: {len(fts_text)}, # Vector results: {len(vector_text)}")
         results = cohere_rerank(query, documents=list(set(fts_text + vector_text)), top_k=top_k)
         return results
 
