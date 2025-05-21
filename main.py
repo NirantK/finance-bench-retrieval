@@ -71,7 +71,7 @@ def agentic_rag(query):
 @click.option("--output-datapath", default="data/evals/", help="Path to output data")
 @click.option("--eval-setup", default="simple", help="Evaluation setup")
 @click.option("--head_n", default=None, help="Number of results to evaluate")
-@click.option("--recursion_limit", default=10, help="Recursion limit for agentic RAG")
+@click.option("--recursion_limit", default=25, help="Recursion limit for agentic RAG")
 def evaluate(data_filepath, output_datapath, eval_setup, head_n, recursion_limit):
     """Evaluate the RAG workflow"""
     df = pd.read_json(data_filepath, lines=True)
