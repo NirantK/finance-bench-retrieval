@@ -70,17 +70,19 @@ def agentic_rag(query):
 )
 @click.option("--output-datapath", default="data/evals/", help="Path to output data")
 @click.option("--eval-setup", default="simple", help="Evaluation setup")
-def evaluate(data_filepath, output_datapath, eval_setup):
+@click.option("--head_n", default=None, help="Number of results to evaluate")
+@click.option("--recursion_limit", default=10, help="Recursion limit for agentic RAG")
+def evaluate(data_filepath, output_datapath, eval_setup, head_n, recursion_limit):
     """Evaluate the RAG workflow"""
     df = pd.read_json(data_filepath, lines=True)
-
-    # df = df.head(10)
+    if head_n:
+        df = df.head(head_n)
     def process_query(row):
         query = row["question"]
         if eval_setup == "simple":
             generated_answer = rag_chain(query)
         elif eval_setup == "agentic":
-            generated_answer = rag_dag(query)
+            generated_answer = rag_dag(query, recursion_limit=recursion_limit)
         else:
             raise ValueError(f"Invalid evaluation setup: {eval_setup}")
         ground_truth = row["answer"]
